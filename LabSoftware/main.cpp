@@ -217,9 +217,6 @@ void BuildFrame(BYTE *pFrame, int view)
 {
 	BYTE *screen = (BYTE *)pFrame; // use copy of screen pointer for safety
 
-	int SBox = 250; // size of box in pixels
-	int channels = 3; // number of colour channels
-
 	for (int i = 0; i < 1000; i++)
 	{
 		SetPixel(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
