@@ -2,6 +2,7 @@
 #include <stdlib.h> //- for exit()
 #include <stdio.h>  //- for sprintf()
 #include <string.h> //- for memset()
+#include <math.h>	//- for pow()
 
 #ifdef _WIN32
 #include "libs/glut.h"
@@ -209,6 +210,48 @@ void SetPixel(BYTE *frame, int x, int y, char r, char g, char b)
 	frame[fbPel + 2] = b;
 }
 
+//
+// Draw Line Function (DDA Method)
+//
+#define ROUND(x) ((int)(x+0.5))
+void DrawLine(BYTE *frame, int x1, int y1, int x2, int y2, char r, char g, char b)
+{
+	int dx = x2 - x1;
+	int dy = y2 - y1;
+	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+	double x_inc = dx / (double)steps;
+	double y_inc = dy / (double)steps;
+	double x = x1;
+	double y = y1;
+	SetPixel(frame, ROUND(x), ROUND(y), r, g, b);
+	for ( int i = 0; i < steps; i++, x+=x_inc, y+=y_inc ) {
+		SetPixel(frame, ROUND(x), ROUND(y), r, g, b);
+	} 
+}
+//
+// Draw Shaded Line Function (DDA Method)
+//
+void DrawShadedLine(BYTE *frame, int x1, int y1, int x2, int y2, int r1, int g1, int b1, int r2, int g2, int b2)
+{
+	int dx = x2 - x1;
+	int dy = y2 - y1;
+	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+	double x_inc = dx / (double)steps;
+	double y_inc = dy / (double)steps;
+	double x = x1;
+	double y = y1;
+	int length = pow((pow(dx,2) + pow(dy,2)), 0.5);
+	double rdiff = (r2 - r1) / (double)length;
+	double gdiff = (g2 - g1) / (double)length;
+	double bdiff = (b2 - b1) / (double)length;
+	double r = (double)r1;
+	double g = (double)g1;
+	double b = (double)b1;
+	SetPixel(frame, ROUND(x), ROUND(y), r1, g1, b1);
+	for ( int i = 0; i < steps; i++, x+=x_inc, y+=y_inc, r+=rdiff, g+=gdiff, b+=bdiff) {
+		SetPixel(frame, ROUND(x), ROUND(y), (int)ceil(r), (int)ceil(g), (int)ceil(b));
+	} 
+}
 ////////////////////////////////////////////////////////
 // Drawing Function
 ////////////////////////////////////////////////////////
@@ -221,4 +264,8 @@ void BuildFrame(BYTE *pFrame, int view)
 	{
 		SetPixel(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
 	}
+
+	DrawLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
+	// DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, 0, 0, 0, 255, 255, 255);
+	DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255);
 }
