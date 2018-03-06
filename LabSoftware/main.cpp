@@ -3,6 +3,7 @@
 #include <stdio.h>  //- for sprintf()
 #include <string.h> //- for memset()
 #include <math.h>	//- for pow()
+#include <unistd.h>
 
 #ifdef _WIN32
 #include "libs/glut.h"
@@ -99,7 +100,8 @@ void OnIdle(void)
 void OnDisplay(void)
 {
 	glClear(GL_COLOR_BUFFER_BIT);
-	glRasterPos2i(0, 0);
+	glPixelZoom(1,-1);
+	glRasterPos2i(0, FRAME_HIGH-1);
 	glDrawPixels(FRAME_WIDE, FRAME_HIGH, GL_RGB, GL_UNSIGNED_BYTE, (GLubyte *)pFrameR);
 	glutSwapBuffers();
 	glFlush();
@@ -202,7 +204,7 @@ void PlaySoundEffect(char *filename)
 // Draw Pixel Function
 //
 
-void SetPixel(BYTE *frame, int x, int y, char r, char g, char b)
+void SetPixel(BYTE *frame, int x, int y, unsigned char r, unsigned char g, unsigned char b)
 {
 	int fbPel = (x + FRAME_WIDE * y) * 3;
 	frame[fbPel] = r;
@@ -214,7 +216,7 @@ void SetPixel(BYTE *frame, int x, int y, char r, char g, char b)
 // Draw Line Function (DDA Method)
 //
 #define ROUND(x) ((int)(x+0.5))
-void DrawLine(BYTE *frame, int x1, int y1, int x2, int y2, char r, char g, char b)
+void DrawLine(BYTE *frame, int x1, int y1, int x2, int y2, unsigned char r, unsigned char g, unsigned char b)
 {
 	int dx = x2 - x1;
 	int dy = y2 - y1;
@@ -231,7 +233,7 @@ void DrawLine(BYTE *frame, int x1, int y1, int x2, int y2, char r, char g, char 
 //
 // Draw Shaded Line Function (DDA Method)
 //
-void DrawShadedLine(BYTE *frame, int x1, int y1, int x2, int y2, int r1, int g1, int b1, int r2, int g2, int b2)
+void DrawShadedLine(BYTE *frame, int x1, int y1, int x2, int y2, unsigned char r1, unsigned char g1, unsigned char b1, unsigned char r2, unsigned char g2, unsigned char b2)
 {
 	int dx = x2 - x1;
 	int dy = y2 - y1;
@@ -252,6 +254,80 @@ void DrawShadedLine(BYTE *frame, int x1, int y1, int x2, int y2, int r1, int g1,
 		SetPixel(frame, ROUND(x), ROUND(y), (int)ceil(r), (int)ceil(g), (int)ceil(b));
 	} 
 }
+
+//
+// Draw Filled Triangle
+//
+#define ROUND_LEFT(x) ((int)ceil(x))
+#define ROUND_RIGHT(x) ((int)ceil(x-1))
+void Triangle(BYTE *frame, int x1, int y1, int x2, int y2, int x3, int y3, unsigned char r, unsigned char g, unsigned char b)
+{
+	// Special case flat-top
+	if (y1 == y2 || y1 == y3 || y2 == y3) {
+		
+	} else {
+		int p1Y = y1 < y2 && y1 < y3 ? y1 : y2 < y1 && y2 < y3 ? y2 : y3;
+		int p3Y = y1 > y2 && y1 > y3 ? y1 : y2 > y1 && y2 > y3 ? y2 : y3;
+		int p2Y = y1 != p1Y && y1 != p3Y ? y1 : y2 != p1Y && y2 != p3Y ? y2 : y3;
+
+		int p1X = p1Y == y1 ? x1 : p1Y == y2 ? x2 : x3;
+		int p3X = p3Y == y1 ? x1 : p3Y == y2 ? x2 : x3;
+		int p2X = x1 != p1X && x1 != p3X ? x1 : x2 != p1X && x2 != p3X ? x2 : x3;
+
+		int dx12 = p2X - p1X,
+			dy12 = p2Y - p1Y,
+			dx13 = p3X - p1X,
+			dy13 = p3Y - p1Y;
+		int st12 = abs(dx12) > abs(dy12) ? abs(dx12) : abs(dy12),
+			st13 = abs(dx13) > abs(dy13) ? abs(dx13) : abs(dy13);
+
+		double x_inc_12 = dx12 / (double)st12,
+			   y_inc_12 = dy12 / (double)st12,
+			   x_inc_13 = dx13 / (double)st13,
+			   y_inc_13 = dy13 / (double)st13;
+		double x12 = p1X, x13 = p1X, y12 = p1Y, y13 = p1Y;
+		SetPixel(frame, ROUND(x12), ROUND(p1Y), r, g, b);
+		for ( int y = p1Y; y < p3Y; y++, x12+=x_inc_12, x13+=x_inc_13 ) {
+			SetPixel(frame, ROUND(x12), ROUND(y12), r, g, b);
+			y12+=y_inc_12;
+			SetPixel(frame, ROUND(x13), ROUND(y13), r, g, b);
+			y13+=y_inc_13; 
+			DrawLine(frame, ROUND(x12), ROUND(y12), ROUND(x13), ROUND(y13), r, g, b);
+		} 
+		int dx = x2 - x1;
+		int dy = y2 - y1;
+		int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+		double x_inc = dx / (double)steps;
+		double y_inc = dy / (double)steps;
+		double x = x1;
+		double y = y1;
+		SetPixel(frame, ROUND(x), ROUND(y), r, g, b);
+		for ( int i = 0; i < steps; i++, x+=x_inc, y+=y_inc ) {
+			SetPixel(frame, ROUND(x), ROUND(y), r, g, b);
+		} 
+		// int avgX = (p1X + p3X) / 2;
+
+		// bool leftEdgeHasKink = p2X < avgX;
+		// double xL = (double)p1X, xR = (double)p1X;
+		// if (leftEdgeHasKink) {
+		// 	double x_right_inc = (p1X - p3X) / (double)abs(p1Y-p3Y);
+		// 	double x_left_inc = (p1X - p2X) / (double)abs(p1Y-p2Y);
+		// 	for (int i = p1Y; i < p3Y; i++, xR+=x_right_inc, xL+=x_left_inc) {
+		// 		if (ROUND(xL) == p2Y) {
+		// 			x_left_inc = (p2X - p3X) / (double)abs(p2Y - p3Y);
+		// 		}
+		// 		DrawLine(frame, ROUND(xL), i, ROUND(xR), i, r, g, b);
+		// 	}
+		// }
+	}
+	// ASSUMING LEGAL COORDINATES
+	// draw 1 - 2
+	DrawLine(frame, x1, y1, x2, y2, 0, 0, b);
+	// draw 2 - 3
+	DrawLine(frame, x2, y2, x3, y3, 0, 0, b);
+	// draw 3 - 1
+	DrawLine(frame, x3, y3, x1, y1, 0, 0, b);
+}
 ////////////////////////////////////////////////////////
 // Drawing Function
 ////////////////////////////////////////////////////////
@@ -260,12 +336,27 @@ void BuildFrame(BYTE *pFrame, int view)
 {
 	BYTE *screen = (BYTE *)pFrame; // use copy of screen pointer for safety
 
-	for (int i = 0; i < 1000; i++)
-	{
-		SetPixel(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
-	}
+	// for (int i = 0; i < 1000; i++)
+	// {
+	// 	SetPixel(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
+	// }
 
-	DrawLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
+	// DrawLine(screen, 0, 0, FRAME_WIDE, FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
 	// DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, 0, 0, 0, 255, 255, 255);
-	DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255);
+	// DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255);
+
+	// Triangle(screen, 100, 100, 200, 100, 100, 200, 255, 255, 255);
+	// Triangle(screen, 
+	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+	// 	255, 255, 255
+	// );
+	Triangle(screen, 
+		50, 150, 
+		150, 250, 
+		250, 50, 
+		255, 255, 255
+	);
+	// sleep(1000);
 }
