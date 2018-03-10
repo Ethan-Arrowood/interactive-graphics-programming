@@ -200,36 +200,26 @@ void PlaySoundEffect(char *filename)
 #endif
 }
 
-class Point {
-    public:
-        int x;
-        int y;
-
-        Point() {
-            x = 0; 
-            y = 0;
-        }
-
-        Point(int x1, int y1) {
-            x = x1;
-            y = y1;
-        }
-
-        double slope(Point p2) {
-            return p2.y == y ? 0 : (p2.x - x) / (double) (p2.y - y);
-        }
+class Color {
+	public:
+		unsigned char r, g, b;
+		Color(unsigned char R, unsigned char G, unsigned char B) {
+		  r = R;
+		  g = G;
+		  b = B;
+		}
 };
 
 //
 // Draw Pixel Function
 //
 
-void SetPixel(BYTE *frame, int x, int y, unsigned char r, unsigned char g, unsigned char b)
+void SetPixel(BYTE *frame, int x, int y, const Color &color)
 {
 	int fbPel = (x + FRAME_WIDE * y) * 3;
-	frame[fbPel] = r;
-	frame[fbPel + 1] = g;
-	frame[fbPel + 2] = b;
+	frame[fbPel] = color.r;
+	frame[fbPel + 1] = color.g;
+	frame[fbPel + 2] = color.b;
 }
 
 //
@@ -281,55 +271,126 @@ void DrawShadedLine(BYTE *frame, int x1, int y1, int x2, int y2, unsigned char r
 #define ROUND_LEFT(x) ((int)ceil(x))
 #define CEIL(x) ((int)ceil(x))
 #define ROUND_RIGHT(x) ((int)ceil(x-1))
-void Triangle(BYTE *frame, int x1, int y1, int x2, int y2, int x3, int y3, unsigned char r, unsigned char g, unsigned char b)
+
+struct Point {
+	int x;
+	int y;
+};
+double calcSlope(Point a, Point b) {
+	return a.y == b.y ? 0 : (b.x - a.x) / (double) (b.y - a.y);
+}
+void DrawTriangle(BYTE *frame, int x1, int y1, int x2, int y2, int x3, int y3, unsigned char r, unsigned char g, unsigned char b)
 {
-	Point p1 = new Point(x1, y1);
-	Point p2 = new Point(x2, y2);
-	Point p3 = new Point(x3, y3);
-	
-	// Special case flat-top
-	// get highest point y value
-	int p1Y = y1 < y2 && y1 < y3 ? y1 : y2 < y1 && y2 < y3 ? y2 : y3;
-	// find its x equivalent
-	int p1X = p1Y == y1 ? x1 : p1Y == y2 ? x2 : x3;
+	Point p1;
+	p1.x = x1;
+	p1.y = y1;
+	Point p2;
+	p2.x = x2;
+	p2.y = y2;
+	Point p3;
+	p3.x = x3;
+	p3.y = y3;
 
-	// arbitrarily set p2 and p3
-	// if p1 is y1, p2 becomes y2
-	// otherwise p2 is y1
-	// p3 is just whats left
-	int p2Y = y1 == p1Y ? y2 : y1;
-	int p2X = p2Y == y1 ? x1 : p2Y == y2 ? x2 : x3;
-	int p3Y = y1 != p1Y && y1 != p3Y ? y1 : y2 != p1Y && y2 != p3Y ? y2 : y3;
-	int p3X = p3Y == y1 ? x1 : p3Y == y2 ? x2 : x3;
-
-	// now figure out which is on which side using angles
-
-	double m1 = (p2X - p1X) / (double)(p2Y - p1Y);
-	double m2 = (p3X - p1X) / (double)(p3Y - p1Y);
-	int pRY, pRX, pLY, pLX;
-	if (atan(m1) < atan(m2)) {
-		pRY = p2Y, pRX = p2X, pLY = p3Y, pLX = p3X;
+	struct Point *mainPoint, *leftPoint, *rightPoint;
+	double m1, m2;
+	bool isFlatTop = false;
+	// Special case colinear
+	if (p1.y == p2.y && p2.y == p3.y) {
+		leftPoint = p1.x < p2.x && p1.x < p3.x ? &p1 : p2.x < p1.x && p2.x < p3.x ? &p2 : &p3;
+		rightPoint = p1.x > p2.x && p1.x > p3.x ? &p1 : p2.x > p1.x && p2.x > p3.x ? &p2 : &p3;
+		DrawLine(frame, leftPoint->x, leftPoint->y, rightPoint->x, leftPoint->y, r, g, b);
+		return;
+	} else if ( p1.y == p2.y || p1.y == p3.y || p2.y == p3.y ) {
+		isFlatTop = true;
+		if (p1.y > p2.y && p1.y > p3.y) {
+			mainPoint = &p1;
+			leftPoint = p2.x < p3.x ? &p2 : &p3;
+			rightPoint = p2.x < p3.x ? &p3 : &p2;
+		} else if (p2.y > p1.y && p2.y > p3.y) {
+			mainPoint = &p2;
+			leftPoint = p1.x < p3.x ? &p1 : &p3;
+			rightPoint = p1.x < p3.x ? &p3 : &p1;
+		} else if (p3.y > p1.y && p3.y > p2.y) {
+			mainPoint = &p3;
+			leftPoint = p1.x < p2.x ? &p1 : &p2;
+			rightPoint = p1.x < p2.x ? &p2 : &p1;
+		}
 	} else {
-		pRY = p3Y, pRX = p3X, pLY = p2Y, pLX = p2X;
+		if ( p1.y < p2.y && p1.y < p3.y ) {
+			mainPoint = &p1;
+			m1 = calcSlope(p1, p2);
+			m2 = calcSlope(p1, p3);
+			rightPoint = atan(m1) < atan(m2) ? &p2 : &p3;
+			leftPoint = atan(m1) < atan(m2) ? &p3 : &p2;
+		} else if ( p2.y < p1.y && p2.y < p3.y ) {
+			mainPoint = &p2;
+			m1 = calcSlope(p2, p1);
+			m2 = calcSlope(p2, p3);
+			rightPoint = atan(m1) < atan(m2) ? &p1 : &p3;
+			leftPoint = atan(m1) < atan(m2) ? &p3 : &p1;
+		} else if ( p3.y < p1.y && p3.y < p2.y ) {
+			mainPoint = &p3;
+			m1 = calcSlope(p3, p1);
+			m2 = calcSlope(p3, p2);
+			rightPoint = atan(m1) < atan(m2) ? &p1 : &p2;
+			leftPoint = atan(m1) < atan(m2) ? &p2 : &p1;
+		}
 	}
 
+	// // get highest point y value
+	// int p1Y = y1 < y2 && y1 < y3 ? y1 : y2 < y1 && y2 < y3 ? y2 : y3;
+	// // find its x equivalent
+	// int p1X = p1Y == y1 ? x1 : p1Y == y2 ? x2 : x3;
+
+	// // arbitrarily set p2 and p3
+	// // if p1 is y1, p2 becomes y2
+	// // otherwise p2 is y1
+	// // p3 is just whats left
+	// int p2Y = y1 == p1Y ? y2 : y1;
+	// int p2X = p2Y == y1 ? x1 : p2Y == y2 ? x2 : x3;
+	// int p3Y = y1 != p1Y && y1 != p3Y ? y1 : y2 != p1Y && y2 != p3Y ? y2 : y3;
+	// int p3X = p3Y == y1 ? x1 : p3Y == y2 ? x2 : x3;
+
+	// // now figure out which is on which side using angles
+
+	// double m1 = (p2X - p1X) / (double)(p2Y - p1Y);
+	// double m2 = (p3X - p1X) / (double)(p3Y - p1Y);
+	// int pRY, pRX, pLY, pLX;
+	// if (atan(m1) < atan(m2)) {
+	// 	pRY = p2Y, pRX = p2X, pLY = p3Y, pLX = p3X;
+	// } else {
+	// 	pRY = p3Y, pRX = p3X, pLY = p2Y, pLX = p2X;
+	// }
+
 	// now we have our hights point: p1 and our left and right edge points pL pR
+	int pLX = leftPoint->x, pLY = leftPoint->y;
+	int pRX = rightPoint->x, pRY = rightPoint->y;
+	int pMX = mainPoint->x, pMY = mainPoint->y;
+	double mL = (pLX - pMX) / (double)(pLY - pMY);
+	double mR = (pRX - pMX) / (double)(pRY - pMY);
 
-	double mL = (pLX - p1X) / (double)(pLY - p1Y);
-	double mR = (pRX - p1X) / (double)(pRY - p1Y);
-
-	double xL = p1X, xR = p1X;
-	int hL = pLY - p1Y, hR = pRY - p1Y;
+	double xL = isFlatTop ? leftPoint->x : mainPoint->x;
+	double xR = isFlatTop ? rightPoint->x : mainPoint->x;
+	int hL = abs(leftPoint->y - mainPoint->y), hR = abs(rightPoint->y - mainPoint->y);
 	int h = (hL > hR) ? hL : hR;
 
+	double fixedY = isFlatTop ? leftPoint->y : mainPoint->y;
 	for (int y = 0; y < h; y++) {
-		DrawLine(frame, xL, p1Y + y, xR, p1Y + y, r, g, b);
+		DrawLine(frame, xL, fixedY+y, xR, fixedY+y, r, g, b);
 		if (y == hL) mL = (pRX - pLX) / (double) (pRY - pLY);
 		if (y == hR) mR = (pLX - pRX) / (double) (pLY - pRY);
 		xL += mL;
 		xR += mR;
 	}
 	
+}
+
+class Line {
+	public:
+		Color c1, c2;
+		int x1, y1, x2, y2;
+
+		Line(const Color &c1)
 }
 
 ////////////////////////////////////////////////////////
@@ -350,17 +411,17 @@ void BuildFrame(BYTE *pFrame, int view)
 	// DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255);
 
 	// Triangle(screen, 100, 100, 200, 100, 100, 200, 255, 255, 255);
-	// Triangle(screen, 
-	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
-	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
-	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
-	// 	255, 255, 255
-	// );
-	Triangle(screen, 
-		50, 150,
-		150, 150,
-		100, 100,
+	DrawTriangle(screen, 
+		rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+		rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+		rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
 		255, 255, 255
 	);
+	// DrawTriangle(screen, 
+	// 	50, 50,
+	// 	150, 50,
+	// 	100, 50,
+	// 	255, 255, 255
+	// );
 	// sleep(1000);
 }
