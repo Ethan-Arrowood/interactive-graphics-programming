@@ -214,7 +214,14 @@ class Color {
 // Draw Pixel Function
 //
 
-void SetPixel(BYTE *frame, int x, int y, const Color &color)
+void SetPixel(BYTE *frame, int x, int y, unsigned char r, unsigned char g, unsigned char b)
+{
+	int fbPel = (x + FRAME_WIDE * y) * 3;
+	frame[fbPel] = r;
+	frame[fbPel + 1] = g;
+	frame[fbPel + 2] = b;
+}
+void SetPixel2(BYTE *frame, int x, int y, const Color &color)
 {
 	int fbPel = (x + FRAME_WIDE * y) * 3;
 	frame[fbPel] = color.r;
@@ -225,11 +232,52 @@ void SetPixel(BYTE *frame, int x, int y, const Color &color)
 //
 // Draw Line Function (DDA Method)
 //
+void DrawLine2(BYTE *frame, int x1, int y1, int x2, int y2, const Color &color1, const Color &color2) {
+	int dx = x2 - x1;
+	int dy = y2 - y1;
+
+	if (dx == 0 && dy == 0) {
+		SetPixel2(frame, x1, y1, color1);
+		return;
+	}
+	int length = pow((pow(dx,2) + pow(dy,2)), 0.5);
+
+	double r1 = color1.r;
+	double g1 = color1.g;
+	double b1 = color1.b;
+	double r2 = color2.r;
+	double g2 = color2.g;
+	double b2 = color2.b;
+	if (abs(dx) > abs(dy)) {
+		int xmin = x1 < x2 ? x1 : x2, xmax = x1 < x2 ? x2 : x1;
+		double m = dy / dx;
+		for(int x = xmin; x <= xmax; x++) {
+			int y = y1 + ((x - x1) * m);
+			double r = r1 + ((r2 - r1) * ((x - x1) / dx));
+			double g = g1 + ((g2 - g1) * ((x - x1) / dx));
+			double b = b1 + ((b2 - b1) * ((x - x1) / dx));
+			Color color (r, g, b);
+			SetPixel2(frame, x, y, color);
+		}
+	} else {
+		int ymin = y1 < y2 ? y1 : y2, ymax = y1 < y2 ? y2 : y1;
+		double m = dx / dy;
+		for(int y = ymin; y <= ymax; y++) {
+			int x = x1 + ((y - y1) * m);
+			double r = r1 + ((r2 - r1) * ((y - y1) / dy));
+			double g = g1 + ((g2 - g1) * ((y - y1) / dy));
+			double b = b1 + ((b2 - b1) * ((y - y1) / dy));
+			Color color (r, g, b);
+			SetPixel2(frame, x, y, color);
+		}
+	}
+}
 #define ROUND(x) ((int)(x+0.5))
 void DrawLine(BYTE *frame, int x1, int y1, int x2, int y2, unsigned char r, unsigned char g, unsigned char b)
 {
 	int dx = x2 - x1;
 	int dy = y2 - y1;
+
 	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
 	double x_inc = dx / (double)steps;
 	double y_inc = dy / (double)steps;
@@ -253,6 +301,33 @@ void DrawShadedLine(BYTE *frame, int x1, int y1, int x2, int y2, unsigned char r
 	double x = x1;
 	double y = y1;
 	int length = pow((pow(dx,2) + pow(dy,2)), 0.5);
+	double rdiff = (r2 - r1) / (double)length;
+	double gdiff = (g2 - g1) / (double)length;
+	double bdiff = (b2 - b1) / (double)length;
+	double r = (double)r1;
+	double g = (double)g1;
+	double b = (double)b1;
+	SetPixel(frame, ROUND(x), ROUND(y), r1, g1, b1);
+	for ( int i = 0; i < steps; i++, x+=x_inc, y+=y_inc, r+=rdiff, g+=gdiff, b+=bdiff) {
+		SetPixel(frame, ROUND(x), ROUND(y), (int)ceil(r), (int)ceil(g), (int)ceil(b));
+	} 
+}
+void DrawShadedLine2(BYTE *frame, int x1, int y1, int x2, int y2, unsigned char r1, unsigned char g1, unsigned char b1, unsigned char r2, unsigned char g2, unsigned char b2)
+{
+	int dx = x2 - x1;
+	int dy = y2 - y1;
+	int steps = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+	double x_inc = dx / (double)steps;
+	double y_inc = dy / (double)steps;
+	double x = x1;
+	double y = y1;
+	int length = pow((pow(dx,2) + pow(dy,2)), 0.5);
+	double r1 = color1.r;
+	double g1 = color1.g;
+	double b1 = color1.b;
+	double r2 = color2.r;
+	double g2 = color2.g;
+	double b2 = color2.b;
 	double rdiff = (r2 - r1) / (double)length;
 	double gdiff = (g2 - g1) / (double)length;
 	double bdiff = (b2 - b1) / (double)length;
@@ -385,14 +460,6 @@ void DrawTriangle(BYTE *frame, int x1, int y1, int x2, int y2, int x3, int y3, u
 	
 }
 
-class Line {
-	public:
-		Color c1, c2;
-		int x1, y1, x2, y2;
-
-		Line(const Color &c1)
-}
-
 ////////////////////////////////////////////////////////
 // Drawing Function
 ////////////////////////////////////////////////////////
@@ -405,18 +472,38 @@ void BuildFrame(BYTE *pFrame, int view)
 	// {
 	// 	SetPixel(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255);
 	// }
-
+	Color c1 (255, 0, 0);
+	Color c2 (0, 255, 0);
+	DrawLine2(screen, 50, 50, 250, 250, c1, c2);
+	DrawShadedLine(screen, 
+		100, 100, 
+		200, 300, 
+		255, 0, 0, 
+		0, 255, 0
+	);
+	DrawShadedLine(screen, 
+		200, 300, 
+		250, 150, 
+		0, 255, 0, 
+		0, 0, 255
+	);
+	DrawShadedLine(screen, 
+		250, 150, 
+		100, 100, 
+		0, 0, 255, 
+		255, 0, 0
+	);
 	// DrawLine(screen, 0, 0, 100, 100, rand() % 255, rand() % 255, rand() % 255);
 	// DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, 0, 0, 0, 255, 255, 255);
 	// DrawShadedLine(screen, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % FRAME_WIDE, rand() % FRAME_HIGH, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255, rand() % 255);
 
 	// Triangle(screen, 100, 100, 200, 100, 100, 200, 255, 255, 255);
-	DrawTriangle(screen, 
-		rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
-		rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
-		rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
-		255, 255, 255
-	);
+	// DrawTriangle(screen, 
+	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+	// 	rand() % FRAME_WIDE, rand() % FRAME_HIGH, 
+	// 	255, 255, 255
+	// );
 	// DrawTriangle(screen, 
 	// 	50, 50,
 	// 	150, 50,
